@@ -1,7 +1,7 @@
 import os
 import re
 from flask import (Flask, flash, request, redirect, 
-    url_for, send_from_directory, render_template)
+    url_for, send_from_directory, send_file, render_template, after_this_request)
 #from flask_executor import Executor
 #from flask_shell2http import Shell2HTTP
 from werkzeug.utils import secure_filename
@@ -80,6 +80,7 @@ def get_k2opt_metadata(output_text: str):
     clean_output = re.sub(r"\[(\d+)[m]", "", output_text)
     # Extract path using regular expression
     results['out_file_path'] = re.findall(r"(?<=written to )(.+?_k2opt\.pdf)", clean_output)[0]
+    results['out_filename'] = results['out_file_path'].split('/')[-1]
     results['file_size'] = re.findall(r"(?<=\()[0-9]\d*(\.\d+)?(?=\sMB\))", clean_output)[0]
     results['cpu_used'] = re.findall(r"(?<=CPU time used: )[1-9]\d*(\.\d+)?", clean_output)[0]
 
@@ -89,6 +90,7 @@ def get_k2opt_metadata(output_text: str):
 @app.route('/transform/kindle2/<filename>')
 def transform_to_kindle(filename):
     try:
+
         echo = subprocess.Popen(('echo'), stdout=subprocess.PIPE)
         transformation = subprocess.Popen(
             ["k2pdfopt", f"temp_files/upload/{filename}"],#, "-ui-", "-om", "0.2"], 
@@ -97,17 +99,40 @@ def transform_to_kindle(filename):
             stderr=subprocess.PIPE) #"-w 784", "-h 1135"
     
         # Capture output and error together
-        #process = subprocess.Popen([program_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, error = transformation.communicate()
         output_text = output.decode() + error.decode()  # Decode bytes to string
-        
         file_info = get_k2opt_metadata(output_text)
+        os.remove(f"temp_files/upload/{filename}")
+        # file_info = {
+        #     'out_file_path': 'temp_files/upload/2404.04988_onepager_local_k2opt.pdf',
+        #     'out_filename': '2404.04988_onepager_local_k2opt.pdf',
+        #     'file_size': 3.7,
+        #     'number_pages': None,
+        #     'cpu_used': 23.67,
+        # }
         if file_info['out_file_path']:
             return render_template('results.html', results=file_info)
         else:
             return "<h1>File Processing not possible</h1>"
     except Exception as e:
+        raise e
         print(f"Error running program: {e}")
         return "<h1>File Processing failed!</h1>"
     #transformation.wait()
     #subprocess.run() 
+
+@app.route('/download/<filename>')
+def download(filename):
+    print(filename)
+    path = f'temp_files/upload/{filename}'
+    print(path)
+    file_handle = open(path, 'r')
+    @after_this_request
+    def remove_file(response):
+        try:
+            os.remove(path)
+            file_handle.close()
+        except Exception as error:
+            app.logger.error("Error removing or closing downloaded file handle", error)
+        return redirect('/', code=303)
+    return send_file(path, as_attachment=True)
