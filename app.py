@@ -2,10 +2,9 @@ import os
 import re
 from flask import (Flask, flash, request, redirect, 
     url_for, send_from_directory, send_file, render_template, after_this_request)
-#from flask_executor import Executor
-#from flask_shell2http import Shell2HTTP
 from werkzeug.utils import secure_filename
 import subprocess
+import time
 
 UPLOAD_FOLDER = './temp_files/upload'
 ALLOWED_EXTENSIONS = {'pdf',}
@@ -93,10 +92,10 @@ def transform_to_kindle(filename):
 
         echo = subprocess.Popen(('echo'), stdout=subprocess.PIPE)
         transformation = subprocess.Popen(
-            ["k2pdfopt", f"temp_files/upload/{filename}"],#, "-ui-", "-om", "0.2"], 
+            ["k2pdfopt", f"temp_files/upload/{filename}"],#, "-ui-", "-om", "0.2", "-w 784", "-h 1135"], 
             stdin=echo.stdout,
             stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE) #"-w 784", "-h 1135"
+            stderr=subprocess.PIPE) 
     
         # Capture output and error together
         output, error = transformation.communicate()
@@ -115,24 +114,25 @@ def transform_to_kindle(filename):
         else:
             return "<h1>File Processing not possible</h1>"
     except Exception as e:
-        raise e
         print(f"Error running program: {e}")
         return "<h1>File Processing failed!</h1>"
-    #transformation.wait()
-    #subprocess.run() 
+
 
 @app.route('/download/<filename>')
 def download(filename):
-    print(filename)
     path = f'temp_files/upload/{filename}'
-    print(path)
     file_handle = open(path, 'r')
-    @after_this_request
-    def remove_file(response):
-        try:
-            os.remove(path)
-            file_handle.close()
-        except Exception as error:
-            app.logger.error("Error removing or closing downloaded file handle", error)
-        return redirect('/', code=303)
+    # TODO: find a way to delete files after download happend or limit the number of downloads!
+    # @after_this_request
+    # def remove_file(response):
+    #     time.sleep(30)
+    #     try:
+    #         os.remove(path)
+    #         file_handle.close()
+    #     except Exception as error:
+    #         app.logger.error("Error removing or closing downloaded file handle", error)
+    #     return redirect('/', code=303)
     return send_file(path, as_attachment=True)
+
+if __name__ == "__main__":
+   app.run()
