@@ -71,17 +71,17 @@ def download_file(name):
 def get_k2opt_metadata(output_text: str):
     # init retirn dict
     results = {
-        out_file_path: None,
-        file_size: None,
-        number_pages: None,
-        cpu_used: None,
+        'out_file_path': None,
+        'file_size': None,
+        'number_pages': None,
+        'cpu_used': None,
     }
     # clean console tokens that are used for coloring the commandline output
     clean_output = re.sub(r"\[(\d+)[m]", "", output_text)
     # Extract path using regular expression
-    results['out_file_path'] = re.findall(r"(?<=written to )(.+?_k2opt\.pdf)", output_text)[0]
-    results['file_size'] = re.findall(r"(?<=\()[0-9]\d*(\.\d+)?(?=\sMB\))", output_text)[0]
-    results['cpu_used'] = re.findall(r"(?<=CPU time used: )[1-9]\d*(\.\d+)?", output_text)[0]
+    results['out_file_path'] = re.findall(r"(?<=written to )(.+?_k2opt\.pdf)", clean_output)[0]
+    results['file_size'] = re.findall(r"(?<=\()[0-9]\d*(\.\d+)?(?=\sMB\))", clean_output)[0]
+    results['cpu_used'] = re.findall(r"(?<=CPU time used: )[1-9]\d*(\.\d+)?", clean_output)[0]
 
     return results
 
@@ -91,7 +91,7 @@ def transform_to_kindle(filename):
     try:
         echo = subprocess.Popen(('echo'), stdout=subprocess.PIPE)
         transformation = subprocess.Popen(
-            ["k2pdfopt", f"temp_files/upload/{filename}", "-ui-", "-om", "0.2"], 
+            ["k2pdfopt", f"temp_files/upload/{filename}"],#, "-ui-", "-om", "0.2"], 
             stdin=echo.stdout,
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE) #"-w 784", "-h 1135"
@@ -101,12 +101,9 @@ def transform_to_kindle(filename):
         output, error = transformation.communicate()
         output_text = output.decode() + error.decode()  # Decode bytes to string
         
-        # Extract path using regular expression
-        with open('./out.txt', 'w', encoding='utf-8') as f:
-            f.write(output_text)
-        out_file_path = re.findall(r"(?<=written to )(.+?_k2opt\.pdf)", output_text)[0]
-        if out_file_path:
-            return "<h1>File Processed successfull! Here is your file  {{out_file_path}}</h1>"
+        file_info = get_k2opt_metadata(output_text)
+        if file_info['out_file_path']:
+            return render_template('results.html', results=file_info)
         else:
             return "<h1>File Processing not possible</h1>"
     except Exception as e:

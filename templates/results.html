@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Process Results</title>
+</head>
+<body>
+  <h1>Process Results</h1>
+  <ul>
+    {% for key, value in results.items() %}
+      <li><strong>{{ key }}:</strong> {% if value is none %} N/A {% else %} {{ value }} {% endif %}</li>
+    {% endfor %}
+  </ul>
+</body>
+</html>
