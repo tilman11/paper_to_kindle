@@ -13,25 +13,26 @@ app = Flask(__name__)
 app.secret_key = 'super secret key'
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000 # 16 MB Uploadlimit
- 
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000  # 16 MB Uploadlimit
+
+
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def parse_command(auto_str: bool, out_marg_:float, w: int, h:int):
+def parse_command(auto_str: bool, out_marg: float, w: int, h: int):
     command = ''
 
     if auto_str:
         command += '-as'
     if out_marg is not None:
-        if out_marg>=0 and out_marg<4:
+        if out_marg >= 0 and out_marg < 4:
             command += f'om {out_marg}'
         else:
             command += f'om {0.2}'
     if type(w) is int and type(h) is int:
-        if w>0 and h>0:
+        if w > 0 and h > 0:
             command += f'-w {w} -h {h}'
 
     return command.lstrip()
@@ -58,14 +59,11 @@ def upload_file():
             return redirect(url_for('transform_to_kindle', filename=filename))
     return render_template('upload.html')
 
-@app.route('/upload')
-def uploaded_files():
-    return "<h1>Test</h1>"
-
 
 @app.route('/uploads/<name>')
 def download_file(name):
     return send_from_directory(app.config["UPLOAD_FOLDER"], name)
+
 
 def get_k2opt_metadata(output_text: str):
     # init retirn dict
@@ -92,7 +90,7 @@ def transform_to_kindle(filename):
 
         echo = subprocess.Popen(('echo'), stdout=subprocess.PIPE)
         transformation = subprocess.Popen(
-            ["k2pdfopt", f"temp_files/upload/{filename}"],#, "-ui-", "-om", "0.2", "-w 784", "-h 1135"], 
+            ["k2pdfopt", f"temp_files/upload/{filename}"],  #, "-ui-", "-om", "0.2", "-w 784", "-h 1135"], 
             stdin=echo.stdout,
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE) 
@@ -121,7 +119,6 @@ def transform_to_kindle(filename):
 @app.route('/download/<filename>')
 def download(filename):
     path = f'temp_files/upload/{filename}'
-    file_handle = open(path, 'r')
     # TODO: find a way to delete files after download happend or limit the number of downloads!
     # @after_this_request
     # def remove_file(response):
@@ -133,6 +130,7 @@ def download(filename):
     #         app.logger.error("Error removing or closing downloaded file handle", error)
     #     return redirect('/', code=303)
     return send_file(path, as_attachment=True)
+
 
 if __name__ == "__main__":
    app.run()
