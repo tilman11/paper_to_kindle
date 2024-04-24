@@ -1,0 +1,2 @@
+* * * * * find /app/temp_files/upload -type f -mmin +1 -delete -ls >> /app/logs/delete_uploads_log
+* * * * * /bin/echo "cron works" >> /tmp/file
