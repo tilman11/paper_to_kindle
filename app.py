@@ -5,15 +5,22 @@ from flask import (Flask, flash, request, redirect,
 from werkzeug.utils import secure_filename
 import subprocess
 import time
+# redis topics
+from rq import Queue
+from rq.job import Job
+from worker import conn_cli
+import requests
 
 UPLOAD_FOLDER = './temp_files/upload'
-ALLOWED_EXTENSIONS = {'pdf',}
+ALLOWED_EXTENSIONS = {'pdf', }
 
 app = Flask(__name__)
 app.secret_key = 'super secret key'
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000  # 16 MB Uploadlimit
+
+q = Queue(connection=conn_cli)
 
 
 def allowed_file(filename):
@@ -41,6 +48,7 @@ def parse_command(auto_str: bool, out_marg: float, w: int, h: int):
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
+        file_info = {}
         # check if the post request has the file part
         if 'file' not in request.files:
             flash('No file part')
@@ -54,10 +62,28 @@ def upload_file():
             return redirect(request.url)
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            flash(os.path.join(app.config['UPLOAD_FOLDER'], filename))
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            return redirect(url_for('transform_to_kindle', filename=filename))
+            # add to job qeue
+            job = q.enqueue_call(
+                func=transform_paper, args=(filename,), result_ttl=5000
+            )
+            print(job.get_id())
+            return render_template('results.html', results=file_info)
+            #return redirect(url_for('transform_to_kindle', filename=filename))
     return render_template('upload.html')
+
+
+@app.route("/results/<job_key>", methods=['GET'])
+def get_results(job_key):
+
+    job = Job.fetch(job_key, connection=conn_cli)
+    print(job.is_finished)
+    job
+
+    if job.is_finished:
+        return str(job.result), 200
+    else:
+        return "Nay!", 202
 
 
 @app.route('/uploads/<name>')
@@ -84,10 +110,48 @@ def get_k2opt_metadata(output_text: str):
     return results
 
 
+def transform_paper(filename):
+    """_summary_
+
+    Args:
+        url (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    try:
+        echo = subprocess.Popen(('echo'), stdout=subprocess.PIPE)
+        transformation = subprocess.Popen(
+            ["k2pdfopt", f"temp_files/upload/{filename}"],  #, "-ui-", "-om", "0.2", "-w 784", "-h 1135"], 
+            stdin=echo.stdout,
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE) 
+    
+        # Capture output and error together
+        output, error = transformation.communicate()
+        output_text = output.decode() + error.decode()  # Decode bytes to string
+        file_info = get_k2opt_metadata(output_text)
+        os.remove(f"temp_files/upload/{filename}")
+        # file_info = {
+        #     'out_file_path': 'temp_files/upload/2404.04988_onepager_local_k2opt.pdf',
+        #     'out_filename': '2404.04988_onepager_local_k2opt.pdf',
+        #     'file_size': 3.7,
+        #     'number_pages': None,
+        #     'cpu_used': 23.67,
+        # }
+        if file_info['out_file_path']:
+            #return render_template('results.html', results=file_info)
+            return file_info
+        else:
+            return "<h1>File Processing not possible</h1>"
+    except Exception as e:
+        print(f"Error in transform_paper(): {e}")
+        return "<h1>File Processing failed!</h1>"
+    
+
 @app.route('/transform/kindle2/<filename>')
 def transform_to_kindle(filename):
     try:
-
         echo = subprocess.Popen(('echo'), stdout=subprocess.PIPE)
         transformation = subprocess.Popen(
             ["k2pdfopt", f"temp_files/upload/{filename}"],  #, "-ui-", "-om", "0.2", "-w 784", "-h 1135"], 
@@ -133,4 +197,4 @@ def download(filename):
 
 
 if __name__ == "__main__":
-   app.run()
+    app.run()
