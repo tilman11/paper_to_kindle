@@ -30,7 +30,11 @@ COPY . .
 RUN mkdir -p temp_files/upload
 # i think the temp_files/uploads folder is missing
 
-EXPOSE 8000
-
 # Run
-CMD [ "gunicorn", "--bind=0.0.0.0:8000", "wsgi:app" ]
+# production
+#EXPOSE 8000
+#CMD [ "gunicorn", "--bind=0.0.0.0:8000", "wsgi:app" ]
+# dev
+EXPOSE 4000
+CMD python3 app.py
+
