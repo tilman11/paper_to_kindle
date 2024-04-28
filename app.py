@@ -1,15 +1,34 @@
 import os
 import re
-from flask import (Flask, flash, request, redirect, 
-    url_for, send_from_directory, send_file, render_template, after_this_request)
+from flask import (Flask, flash, request, redirect,
+                   url_for, send_from_directory, send_file, render_template, after_this_request)
 from werkzeug.utils import secure_filename
 import subprocess
 import time
 # redis topics
 from rq import Queue
 from rq.job import Job
-from worker import conn_cli
 import requests
+import logging
+
+from worker import conn_cli
+
+# Create a logger for your application
+app_logger = logging.getLogger(__name__)
+
+# Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+app_logger.setLevel(logging.DEBUG)
+
+# Create a file handler for logs (optional)
+file_handler = logging.FileHandler('your_app.log')
+file_handler.setLevel(logging.INFO)  # Set log level for file handler
+
+# Define the format for log messages
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+
+# Add the handler to the logger (optional for file logging)
+app_logger.addHandler(file_handler)
 
 UPLOAD_FOLDER = './temp_files/upload'
 ALLOWED_EXTENSIONS = {'pdf', }
@@ -69,7 +88,7 @@ def upload_file():
             )
             print(job.get_id())
             return render_template('results.html', results=file_info)
-            #return redirect(url_for('transform_to_kindle', filename=filename))
+            # return redirect(url_for('transform_to_kindle', filename=filename))
     return render_template('upload.html')
 
 
@@ -102,10 +121,13 @@ def get_k2opt_metadata(output_text: str):
     # clean console tokens that are used for coloring the commandline output
     clean_output = re.sub(r"\[(\d+)[m]", "", output_text)
     # Extract path using regular expression
-    results['out_file_path'] = re.findall(r"(?<=written to )(.+?_k2opt\.pdf)", clean_output)[0]
+    results['out_file_path'] = re.findall(
+        r"(?<=written to )(.+?_k2opt\.pdf)", clean_output)[0]
     results['out_filename'] = results['out_file_path'].split('/')[-1]
-    results['file_size'] = re.findall(r"(?<=\()[0-9]\d*(\.\d+)?(?=\sMB\))", clean_output)[0]
-    results['cpu_used'] = re.findall(r"(?<=CPU time used: )[1-9]\d*(\.\d+)?", clean_output)[0]
+    results['file_size'] = re.findall(
+        r"(?<=\()[0-9]\d*(\.\d+)?(?=\sMB\))", clean_output)[0]
+    results['cpu_used'] = re.findall(
+        r"(?<=CPU time used: )[1-9]\d*(\.\d+)?", clean_output)[0]
 
     return results
 
@@ -122,11 +144,12 @@ def transform_paper(filename):
     try:
         echo = subprocess.Popen(('echo'), stdout=subprocess.PIPE)
         transformation = subprocess.Popen(
-            ["k2pdfopt", f"temp_files/upload/{filename}"],  #, "-ui-", "-om", "0.2", "-w 784", "-h 1135"], 
+            # , "-ui-", "-om", "0.2", "-w 784", "-h 1135"],
+            ["k2pdfopt", f"temp_files/upload/{filename}"],
             stdin=echo.stdout,
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE) 
-    
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
         # Capture output and error together
         output, error = transformation.communicate()
         output_text = output.decode() + error.decode()  # Decode bytes to string
@@ -140,25 +163,26 @@ def transform_paper(filename):
         #     'cpu_used': 23.67,
         # }
         if file_info['out_file_path']:
-            #return render_template('results.html', results=file_info)
+            # return render_template('results.html', results=file_info)
             return file_info
         else:
             return "<h1>File Processing not possible</h1>"
     except Exception as e:
         print(f"Error in transform_paper(): {e}")
         return "<h1>File Processing failed!</h1>"
-    
+
 
 @app.route('/transform/kindle2/<filename>')
 def transform_to_kindle(filename):
     try:
         echo = subprocess.Popen(('echo'), stdout=subprocess.PIPE)
         transformation = subprocess.Popen(
-            ["k2pdfopt", f"temp_files/upload/{filename}"],  #, "-ui-", "-om", "0.2", "-w 784", "-h 1135"], 
+            # , "-ui-", "-om", "0.2", "-w 784", "-h 1135"],
+            ["k2pdfopt", f"temp_files/upload/{filename}"],
             stdin=echo.stdout,
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE) 
-    
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
         # Capture output and error together
         output, error = transformation.communicate()
         output_text = output.decode() + error.decode()  # Decode bytes to string
@@ -197,4 +221,5 @@ def download(filename):
 
 
 if __name__ == "__main__":
-    app.run()
+    # renmove before production
+    app.run(debug=True, host="0.0.0.0", port=4000)
