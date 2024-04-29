@@ -86,7 +86,8 @@ def upload_file():
             job = q.enqueue_call(
                 func=transform_paper, args=(filename,), result_ttl=5000
             )
-            print(job.get_id())
+            app_logger.info(job.get_id())
+            app_logger.info(job.created_at)
             return render_template('results.html', results=file_info)
             # return redirect(url_for('transform_to_kindle', filename=filename))
     return render_template('upload.html')
