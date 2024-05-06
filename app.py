@@ -64,6 +64,11 @@ def parse_command(auto_str: bool, out_marg: float, w: int, h: int):
     return command.lstrip()
 
 
+def test_redis(filename):
+    time.sleep(7)
+    return {'someInfo': 'some/path/to/file.pdf'}
+
+
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
@@ -82,13 +87,16 @@ def upload_file():
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            # rq bug
+            from app import test_redis, transform_paper
             # add to job qeue
             job = q.enqueue_call(
                 func=transform_paper, args=(filename,), result_ttl=5000
             )
-            app_logger.info(job.get_id())
-            app_logger.info(job.created_at)
-            return render_template('results.html', results=file_info)
+            app_logger.info("Starting: %s", job.get_id())
+            # app_logger.info(job.created_at)
+            return render_template('loading.html', job_key=job.get_id())
+            # return render_template('results.html', results=file_info)
             # return redirect(url_for('transform_to_kindle', filename=filename))
     return render_template('upload.html')
 
@@ -97,13 +105,29 @@ def upload_file():
 def get_results(job_key):
 
     job = Job.fetch(job_key, connection=conn_cli)
-    print(job.is_finished)
-    job
+    if job.get_status() not in ['canceled', 'failed', ]: #'enqued', 'started', 'finished']:
+        app_logger.error(job.exc_info)
+    app_logger.info("JOB STATUS: %s", job.get_status())
+    app_logger.info("JOB exec info: %s", job.exc_info)
 
     if job.is_finished:
         return str(job.result), 200
-    else:
-        return "Nay!", 202
+    return "Nay!", 202
+
+
+@app.route("/show_results/<job_key>")
+def show_results(job_key):
+    file_info = {
+            'out_file_path': 'temp_files/upload/2404.04988_onepager_local_k2opt.pdf',
+            'out_filename': '2404.04988_onepager_local_k2opt.pdf',
+            'file_size': 3.7,
+            'number_pages': None,
+            'cpu_used': 23.67,
+    }
+    job = Job.fetch(job_key, connection=conn_cli)
+    result = job.result
+    app_logger.debug("%s", result)
+    return render_template('results.html', results=result)
 
 
 @app.route('/uploads/<name>')
@@ -143,9 +167,10 @@ def transform_paper(filename):
         _type_: _description_
     """
     try:
+        app_logger.info("Start Transformation of file: %s", filename)
         echo = subprocess.Popen(('echo'), stdout=subprocess.PIPE)
         transformation = subprocess.Popen(
-            # , "-ui-", "-om", "0.2", "-w 784", "-h 1135"],
+            # "-ui-", "-om", "0.2", "-w 784", "-h 1135"],
             ["k2pdfopt", f"temp_files/upload/{filename}"],
             stdin=echo.stdout,
             stdout=subprocess.PIPE,
@@ -154,7 +179,9 @@ def transform_paper(filename):
         # Capture output and error together
         output, error = transformation.communicate()
         output_text = output.decode() + error.decode()  # Decode bytes to string
+        app_logger.info("Get execution context for transformation")
         file_info = get_k2opt_metadata(output_text)
+        app_logger.info("Delete raw file in local filesystem")
         os.remove(f"temp_files/upload/{filename}")
         # file_info = {
         #     'out_file_path': 'temp_files/upload/2404.04988_onepager_local_k2opt.pdf',
@@ -186,7 +213,7 @@ def transform_to_kindle(filename):
 
         # Capture output and error together
         output, error = transformation.communicate()
-        output_text = output.decode() + error.decode()  # Decode bytes to string
+        output_text = output.decode() + error.decode() # Decode bytes to string
         file_info = get_k2opt_metadata(output_text)
         os.remove(f"temp_files/upload/{filename}")
         # file_info = {
@@ -208,7 +235,8 @@ def transform_to_kindle(filename):
 @app.route('/download/<filename>')
 def download(filename):
     path = f'temp_files/upload/{filename}'
-    # TODO: find a way to delete files after download happend or limit the number of downloads!
+    # TODO: find a way to delete files after download happend
+    # or limit the number of downloads!
     # @after_this_request
     # def remove_file(response):
     #     time.sleep(30)

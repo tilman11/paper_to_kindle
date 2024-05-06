@@ -28,7 +28,10 @@ RUN systemctl start cron.service
 # copy the application to the working directory.
 COPY . .
 RUN mkdir -p temp_files/upload
-# i think the temp_files/uploads folder is missing
+
+# startup redis worker
+#RUN python3 worker.py
+
 
 # Run
 # production
@@ -36,5 +39,5 @@ RUN mkdir -p temp_files/upload
 #CMD [ "gunicorn", "--bind=0.0.0.0:8000", "wsgi:app" ]
 # dev
 EXPOSE 4000
-CMD python3 app.py
+CMD python3 app.py worker.py
 

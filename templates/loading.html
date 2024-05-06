@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>Loading page</title>
+</head>
+
+<body>
+    <h1 class="centered" id="job-status">Loading page...</h1>
+
+    <p class="centered">Users will be mesmerised by this beautiful animation while your Python slow_loading_function()
+        runs quietly in
+        the
+        background.
+    </p>
+    <div class="centered">
+        <div class="lds-facebook">
+            <div></div>
+            <div></div>
+            <div></div>
+        </div>
+    </div>
+    <p class="centered">Once the job is done, Flask will load the "results.html" page.</p>
+</body>
+
+<script>
+const jobId = "{{ job_key }}"; // Replace with your actual job ID from Jinja template
+
+// Fetch the job status element from the DOM (assuming it exists)
+const statusElement = document.getElementById('job-status');
+
+async function checkJobStatus() {
+  try {
+    const response = await fetch(`/results/${jobId}`);
+    const data = await response;//.json();
+    console.log(data); // Log the data for debugging purposes
+
+    if (response.status === 202) {
+      // Job processing not complete, update UI and schedule next check
+      if (statusElement) {
+        statusElement.textContent = 'Processing...';
+      }
+      setTimeout(checkJobStatus, 5000); // Check again in 5 seconds
+    } else if (response.status === 200) {
+      // Job completed, redirect using Jinja template function
+      const redirectUrl = "{{ url_for('show_results', job_key=job_key) }}"; // Replace with your redirect route name
+      window.location.href = redirectUrl;
+    } else {
+      // Unexpected status code, handle error
+      console.error('Unexpected response status:', response.status);
+      console.error(response.json)
+      if (statusElement) {
+        statusElement.textContent = 'Error!';
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching results:', error);
+    if (statusElement) {
+      statusElement.textContent = 'Error!'; // Update UI with error message
+    }
+  }
+}
+
+// Call the checkJobStatus function on page load
+checkJobStatus();
+
+
+</script>
+</html>
